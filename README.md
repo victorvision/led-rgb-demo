@@ -1,66 +1,58 @@
-# SIMPLE LED DEMO - DOCUMENTATION
+# RGB LED DEMO - DOCUMENTATION
 
 ## 1. What the Demo Does
 
-The Simple LED demo demonstrates a basic serial communication between a display and an Arduino. When the ON or OFF button on the display is pressed, the display automatically sends a packet through the serial connection. The Arduino receives this packet using `lumen_available()` and `lumen_get_first_packet()` functions, and then controls an LED based on the command received.
+The RGB LED demo illustrates how to control an RGB LED's colors using an external display with sliders for red, green, and blue channels. It uses the Lumen Protocol to handle serial communication, updating the LED's color in real-time based on user input. Additionally, it displays the current color as an RGB-565 value and its hexadecimal representation on the display.
 
-This project showcases how to receive a simple serial packet from the display and perform a basic hardware control operation by turning an LED on or off.
+This project demonstrates interactive control of hardware components (LED) using live data sent via serial communication.
 
 ## 2. Purpose
 
-This project is intended for educational and demonstration purposes. It illustrates the basics of serial communication between a display and an Arduino, with a focus on receiving commands and performing hardware control (turning an LED on or off).
+The primary purpose of this project is to demonstrate how to receive serial packets to control hardware components and visually represent those changes on an external display. It's useful for learning real-time data-driven hardware control and integrating displays for enhanced interactivity.
 
 ## 3. How to Use
 
-### 3.1 Setting up the Hardware
+### 3.1 Setting Up the Hardware
 
-To set up the system and control the LED:
-1. Connect an LED to digital pin 8 on the Arduino.
-2. Ensure the LED's anode is connected to pin 8, and the cathode is connected to the GND of the Arduino through a 330Ω resistor.
-3. Connect the display to the Arduino through a serial connection.
+To set up the RGB LED system:
+
+1. Connect an RGB LED's pins to the following Arduino pins:
+   - **Red**: Pin 9 (via a 220Ω resistor)
+   - **Green**: Pin 10 (via a 220Ω resistor)
+   - **Blue**: Pin 11 (via a 220Ω resistor)
+2. Connect the cathode (common ground) of the RGB LED to the Arduino's GND pin.
+3. Connect the display to the Arduino via a serial connection and ensure proper power supply (5V or 12V).
 
 ### 3.2 Sending Commands from the Display
 
-The display interface includes ON and OFF buttons that, when pressed, send a serial packet to the Arduino:
-- Pressing the **ON** button on the display sends a packet with a command to turn on the LED.
-- Pressing the **OFF** button sends a command to turn off the LED.
+The display provides sliders for red, green, and blue channels. Adjusting these sliders sends serial packets with intensity values (0-255) for each channel:
 
-The Arduino receives and interprets these packets to control the LED accordingly.
+### 3.3 Power Supply
 
-## 4. Power Supply
-* The Arduino can be powered via USB (5V) or an external 5V power supply. The display should be powered through the +Vin and GND pins, with a voltage of either 5V or 12V.
+- The Arduino can be powered via USB (5V) or an external 5V power source.
+- The display requires a compatible power source (5V) connected to its +Vin and GND pins.
 
-## 5. Schematic Circuit
+## 4. Schematic Circuit
 
-The circuit for the Simple LED demo includes an LED connected to digital pin 8 on the Arduino, with a 330Ω current-limiting resistor in series.
+Below is the schematic for the RGB LED setup:
 
-<img src="schematic-circuit/simple-led-schematic-circuit.svg" alt="simpleLedSchematicCircuit" width="800">
+![Schematic Circuit](led-rgb-demo/schematic-circuit/led-rgb-schematic-circuit.svg)
 
-## 6. Code
+## 5. Code Overview
 
+The following C++ code is used for the RGB LED demo. It initializes communication via the Lumen Protocol, updates LED colors based on slider inputs, and sends the current color back to the display in HEX format.
 
-
-The main code for this project is implemented in C++ and uses the Lumen protocol to handle the reception of packets from the display and control the LED state. The code below shows the full implementation:
+### Key Features:
+- **Serial Communication**: Handled by `lumen_available()` and `lumen_get_first_packet()`.
+- **RGB LED Control**: Adjusts PWM values on pins 9, 10, and 11 based on slider inputs.
+- **Color Representation**:
+  - **RGB-565**: A 16-bit compact format sent to the display.
+  - **HEX**: A standard color code for visualization.
 
 ```cpp
-
 #include "LumenProtocol.h"
 
-#define LCM_BAUDRATE 115200  // Data transmission rate
-
-// Configuration constants
-const uint8_t LED_PIN = 8;              // LED pin
-const uint8_t LED_ON = 1;               // Value to turn the LED on
-const uint8_t LED_OFF = 0;              // Value to turn the LED off
-const uint8_t LED_STATUS_ADDRESS = 20;  // Address for the LED packet
-const uint16_t INIT_DELAY = 1000;       // Initial delay
-
-// Defining the packet for LED control
-lumen_packet_t led_status = { LED_STATUS_ADDRESS, kS32 };  // Packet with address 20 and int32 data type
-lumen_packet_t *current_packet;                            // Pointer to the current packet
-
-// Functions for sending and receiving data via Lumen protocol
-extern "C" void lumen_write_bytes(uint8_t *data, uint32_t length) {
+extern "C" void lumen_write_bytes(uint8_t* data, uint32_t length) {
   Serial.write(data, length);
 }
 
@@ -71,36 +63,56 @@ extern "C" uint16_t lumen_get_byte() {
   return DATA_NULL;
 }
 
-// System initialization
+#define LCM_BAUD_RATE 115200
+const uint8_t RED_PIN = 9, GREEN_PIN = 10, BLUE_PIN = 11;
+const uint8_t RED_SLIDER_ADDRESS = 30, GREEN_SLIDER_ADDRESS = 50, BLUE_SLIDER_ADDRESS = 40;
+const uint8_t PALETTE_COLORS_ADDRESS = 206, HEX_COLOR_DISPLAY_ADDRESS = 200;
+
+char hexColorString[10];
+uint8_t colorLedRed = 0, colorLedGreen = 0, colorLedBlue = 0;
+uint16_t color565Palette = 0;
+lumen_packet_t paletteColors = { PALETTE_COLORS_ADDRESS, kS16 };
+lumen_packet_t hexColorDisplay = { HEX_COLOR_DISPLAY_ADDRESS, kString };
+
+void updatePaletteColor() {
+  color565Palette = ((colorLedRed >> 3) << 11) | ((colorLedGreen >> 2) << 5) | (colorLedBlue >> 3);
+  paletteColors.data._s16 = color565Palette;
+  lumen_write_packet(&paletteColors);
+}
+
+void updateHexColor() {
+  snprintf(hexColorString, sizeof(hexColorString), "#%02X%02X%02X", colorLedRed, colorLedGreen, colorLedBlue);
+  strncpy(hexColorDisplay.data._string, hexColorString, sizeof(hexColorDisplay.data._string));
+  lumen_write_packet(&hexColorDisplay);
+}
+
+void processPacket(lumen_packet_t* packet) {
+  if (packet->address == RED_SLIDER_ADDRESS) {
+    colorLedRed = packet->data._s32;
+    analogWrite(RED_PIN, colorLedRed);
+  } else if (packet->address == GREEN_SLIDER_ADDRESS) {
+    colorLedGreen = packet->data._s32;
+    analogWrite(GREEN_PIN, colorLedGreen);
+  } else if (packet->address == BLUE_SLIDER_ADDRESS) {
+    colorLedBlue = packet->data._s32;
+    analogWrite(BLUE_PIN, colorLedBlue);
+  }
+  updatePaletteColor();
+  updateHexColor();
+}
+
 void setup() {
-  delay(INIT_DELAY);           // Initial delay
-  Serial.begin(LCM_BAUDRATE);  // Initialize serial communication
-  pinMode(LED_PIN, OUTPUT);    // Set the LED pin as output
+  delay(1000);
+  Serial.begin(LCM_BAUD_RATE);
+  pinMode(RED_PIN, OUTPUT);
+  pinMode(GREEN_PIN, OUTPUT);
+  pinMode(BLUE_PIN, OUTPUT);
 }
 
-// Helper function for controlling the LED
-void controlLed(int state) {
-  if (state == LED_ON) {
-    digitalWrite(LED_PIN, HIGH);  // Turn the LED on
-  } else if (state == LED_OFF) {
-    digitalWrite(LED_PIN, LOW);  // Turn the LED off
-  }
-}
-
-// Function to process the received packet
-void processPacket(lumen_packet_t *packet) {
-  if (packet->address == LED_STATUS_ADDRESS) {  // Check if the packet is for the LED control
-    int led_state = packet->data._s32;          // Get the LED state from the packet
-    controlLed(led_state);                      // Control the LED based on the command
-  }
-}
-
-// Main loop
 void loop() {
-  // Check if a packet is available from the display
   while (lumen_available() > 0) {
-    current_packet = lumen_get_first_packet();  // Retrieve the first available packet
-    processPacket(current_packet);              // Process the received packet to control the LED
+    lumen_packet_t* currentPacket = lumen_get_first_packet();
+    processPacket(currentPacket);
   }
 }
 
