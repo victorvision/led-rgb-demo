@@ -36,7 +36,8 @@ The display provides sliders for red, green, and blue channels. Adjusting these 
 
 Below is the schematic for the RGB LED setup:
 
-![Schematic Circuit](led-rgb-demo/schematic-circuit/led-rgb-schematic-circuit.svg)
+![Schematic Circuit](schematic-circuit/led-rgb-schematic-circuit.svg)
+
 
 ## 5. Code Overview
 
